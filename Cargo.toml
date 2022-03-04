@@ -229,8 +229,7 @@ incremental = true
 debug-assertions = false
 
 [profile.dev]
-opt-level = 3
-lto = "thin"
+opt-level = 0
 incremental = true
 
 [profile.test]

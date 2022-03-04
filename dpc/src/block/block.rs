@@ -122,6 +122,28 @@ impl<N: Network> Block<N> {
         }
     }
 
+    /// Initializes a new block from a given previous hash, header, and transactions list.
+    pub fn from_unchecked(
+        previous_block_hash: N::BlockHash,
+        header: BlockHeader<N>,
+        transactions: Transactions<N>,
+    ) -> Result<Self, BlockError> {
+        assert!(!(*transactions).is_empty(), "Cannot create block with no transactions");
+
+        // Compute the block hash.
+        let block_hash = N::block_hash_crh()
+            .hash(&to_bytes_le![previous_block_hash, header.to_header_root()?]?)?
+            .into();
+
+        // Construct the block.
+        Ok(Self {
+            block_hash,
+            previous_block_hash,
+            header,
+            transactions,
+        })
+    }
+
     /// Returns `true` if the block is well-formed.
     pub fn is_valid(&self) -> bool {
         // Ensure the previous block hash is well-formed.
