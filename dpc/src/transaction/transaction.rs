@@ -473,7 +473,7 @@ impl<N: Network> Transaction<N> {
     }
 
     #[inline]
-    fn read_le_unchecked<R: Read>(mut reader: R) -> IoResult<Self> {
+    pub fn read_le_unchecked<R: Read>(mut reader: R) -> IoResult<Self> {
         let inner_circuit_id = FromBytes::read_le(&mut reader)?;
         let ledger_root = FromBytes::read_le(&mut reader)?;
 
