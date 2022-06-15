@@ -232,6 +232,20 @@ impl<N: Network> Transition<N> {
         self.execution.verify(self.transition_id)
     }
 
+    /// Returns `true` if the transition ID is well-formed.
+    #[inline]
+    pub fn verify_fast(
+        &self,
+    ) -> bool {
+        // Ensure the number of events is less than `N::NUM_EVENTS`.
+        if self.events.len() > N::NUM_EVENTS as usize {
+            eprintln!("Transition contains an invalid number of events");
+            return false;
+        }
+
+        true
+    }
+
     /// Returns `true` if the given serial number exists.
     pub fn contains_serial_number(&self, serial_number: &N::SerialNumber) -> bool {
         self.serial_numbers.contains(serial_number)

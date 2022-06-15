@@ -106,6 +106,28 @@ impl<N: Network> Transaction<N> {
         }
     }
 
+    /// Initializes an instance of `Transaction` from the given inputs.
+    #[inline]
+    pub fn from_unchecked(
+        inner_circuit_id: N::InnerCircuitID,
+        ledger_root: N::LedgerRoot,
+        transitions: Vec<Transition<N>>,
+    ) -> Result<Self> {
+        let transaction_id = Self::compute_transaction_id(&transitions)?;
+
+        let transaction = Self {
+            transaction_id,
+            inner_circuit_id,
+            ledger_root,
+            transitions,
+        };
+
+        match transaction.is_valid_fast() {
+            true => Ok(transaction),
+            false => Err(anyhow!("Failed to initialize a transaction")),
+        }
+    }
+
     /// Returns `true` if the transaction is well-formed, meaning it contains
     /// the correct network ID, unique serial numbers, unique commitments,
     /// correct ciphertext IDs, and a valid proof.
@@ -228,6 +250,110 @@ impl<N: Network> Transaction<N> {
         true
     }
 
+    /// Returns `true` if the transaction is well-formed, meaning it contains
+    /// the correct network ID, unique serial numbers, unique commitments,
+    /// and correct ciphertext IDs.
+    #[inline]
+    pub fn is_valid_fast(&self) -> bool {
+        // Ensure the number of transitions is between 1 and N::NUM_TRANSITIONS.
+        let num_transitions = self.transitions.len();
+        if num_transitions < 1 || num_transitions > N::NUM_TRANSITIONS as usize {
+            eprintln!("Transaction contains invalid number of transitions");
+            return false;
+        }
+
+        // Ensure the number of events is less than `N::NUM_EVENTS`.
+        if self.events().count() > num_transitions * N::NUM_EVENTS as usize {
+            eprintln!("Transaction contains an invalid number of events");
+            return false;
+        }
+
+        // Returns `false` if the number of serial numbers in the transaction is incorrect.
+        if self.serial_numbers().count() != num_transitions * N::NUM_INPUT_RECORDS {
+            eprintln!("Transaction contains incorrect number of serial numbers");
+            return false;
+        }
+
+        // Returns `false` if there are duplicate serial numbers in the transaction.
+        if has_duplicates(self.serial_numbers()) {
+            eprintln!("Transaction contains duplicate serial numbers");
+            return false;
+        }
+
+        // Returns `false` if the number of commitments in the transaction is incorrect.
+        if self.commitments().count() != num_transitions * N::NUM_OUTPUT_RECORDS {
+            eprintln!("Transaction contains incorrect number of commitments");
+            return false;
+        }
+
+        // Returns `false` if there are duplicate commitments numbers in the transaction.
+        if has_duplicates(self.commitments()) {
+            eprintln!("Transaction contains duplicate commitments");
+            return false;
+        }
+
+        // Returns `false` if the number of record ciphertexts in the transaction is incorrect.
+        if self.ciphertexts().count() != num_transitions * N::NUM_OUTPUT_RECORDS {
+            eprintln!("Transaction contains incorrect number of record ciphertexts");
+            return false;
+        }
+
+        // Returns `false` if there are duplicate ciphertexts in the transition.
+        if has_duplicates(self.ciphertexts()) {
+            eprintln!("Transaction contains duplicate ciphertexts");
+            return false;
+        }
+
+        // Returns `false` if the transaction is not a coinbase, and has a transition with a negative value balance.
+        if self.transitions.len() > 1
+            && self
+            .transitions
+            .iter()
+            .any(|transition| transition.value_balance().is_negative())
+        {
+            eprintln!("Transaction contains a transition with a negative value balance");
+            return false;
+        }
+
+        // Initialize a local transitions tree.
+        let mut transitions = match Transitions::<N>::new() {
+            Ok(transitions) => transitions,
+            Err(error) => {
+                eprintln!("Transaction failed to initialize a local transitions tree: {}", error);
+                return false;
+            }
+        };
+
+        // Returns `false` if any transition is invalid.
+        for transition in &self.transitions {
+            // Returns `false` if the transition is invalid.
+            if !transition.verify_fast() {
+                eprintln!("Transaction contains an invalid transition");
+                return false;
+            }
+
+            // Update the local transitions tree.
+            if let Err(error) = transitions.add(transition) {
+                eprintln!("Transaction failed to update local transitions tree: {}", error);
+                return false;
+            }
+        }
+
+        // Returns `false` if the size of the local transitions tree does not match the number of transitions.
+        if transitions.len() != num_transitions {
+            eprintln!("Transaction contains invalid local transitions tree state");
+            return false;
+        }
+
+        // Returns `false` if the final transitions root does not match the transaction ID.
+        if transitions.root() != self.transaction_id {
+            eprintln!("Transaction contains an invalid transaction ID");
+            return false;
+        }
+
+        true
+    }
+
     /// Returns `true` if the given transition ID exists.
     pub fn contains_transition_id(&self, transition_id: &N::TransitionID) -> bool {
         self.transitions.iter().map(Transition::transition_id).contains(transition_id)
@@ -344,6 +470,20 @@ impl<N: Network> Transaction<N> {
         transitions_tree.add_all(transitions)?;
         // Return the root of the transitions tree.
         Ok(transitions_tree.root())
+    }
+
+    #[inline]
+    fn read_le_unchecked<R: Read>(mut reader: R) -> IoResult<Self> {
+        let inner_circuit_id = FromBytes::read_le(&mut reader)?;
+        let ledger_root = FromBytes::read_le(&mut reader)?;
+
+        let num_transitions: u16 = FromBytes::read_le(&mut reader)?;
+        let mut transitions = Vec::with_capacity(num_transitions as usize);
+        for _ in 0..num_transitions {
+            transitions.push(FromBytes::read_le(&mut reader)?);
+        }
+
+        Ok(Self::from_unchecked(inner_circuit_id, ledger_root, transitions).expect("Failed to deserialize a transaction"))
     }
 }
 
