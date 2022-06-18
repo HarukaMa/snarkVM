@@ -113,6 +113,30 @@ impl<N: Network> BlockHeader<N> {
         }
     }
 
+    /// Initializes a new instance of a block header.
+    pub fn from_unchecked(
+        previous_ledger_root: N::LedgerRoot,
+        transactions_root: N::TransactionsRoot,
+        metadata: BlockHeaderMetadata,
+        nonce: N::PoSWNonce,
+        proof: PoSWProof<N>,
+    ) -> Result<Self, BlockError> {
+        // Construct the block header.
+        let block_header = Self {
+            previous_ledger_root,
+            transactions_root,
+            metadata,
+            nonce,
+            proof,
+        };
+
+        // Ensure the block header is well-formed.
+        match block_header.is_valid_fast() {
+            true => Ok(block_header),
+            false => Err(BlockError::Message("Invalid block header".to_string())),
+        }
+    }
+
     /// Mines a new instance of a block header.
     pub fn mine<R: Rng + CryptoRng>(
         block_template: &BlockTemplate<N>,
@@ -184,6 +208,33 @@ impl<N: Network> BlockHeader<N> {
                     // Ensure the PoSW proof is valid.
                     && N::posw().verify_from_block_header(self)
             }
+        }
+    }
+
+    /// Returns `true` if the block header is well-formed.
+    pub fn is_valid_fast(&self) -> bool {
+        // Ensure the ledger root is nonzero.
+        if self.previous_ledger_root == Default::default() {
+            eprintln!("Invalid ledger root in block header");
+            return false;
+        }
+
+        // Ensure the transactions root is nonzero.
+        if self.transactions_root == Default::default() {
+            eprintln!("Invalid transactions root in block header");
+            return false;
+        }
+
+        // Ensure the nonce is nonzero.
+        if self.nonce == Default::default() {
+            eprintln!("Invalid nonce in block header");
+            return false;
+        }
+
+        // Ensure the metadata is valid.
+        match self.metadata.height == 0u32 {
+            true => self.is_genesis(),
+            false => true
         }
     }
 
@@ -266,6 +317,39 @@ impl<N: Network> BlockHeader<N> {
     /// Returns the block header root.
     pub fn to_header_root(&self) -> Result<N::BlockHeaderRoot> {
         Ok((*self.to_header_tree()?.root()).into())
+    }
+
+    #[inline]
+    pub fn read_le_unchecked<R: Read>(mut reader: R) -> IoResult<Self> {
+        // Read the header core variables.
+        let previous_ledger_root = FromBytes::read_le(&mut reader)?;
+        let transactions_root = FromBytes::read_le(&mut reader)?;
+
+        // Read the header metadata.
+        let height = <[u8; 4]>::read_le(&mut reader)?;
+        let timestamp = <[u8; 8]>::read_le(&mut reader)?;
+        let difficulty_target = <[u8; 8]>::read_le(&mut reader)?;
+        let cumulative_weight = <[u8; 16]>::read_le(&mut reader)?;
+        let metadata = BlockHeaderMetadata {
+            height: u32::from_le_bytes(height),
+            timestamp: i64::from_le_bytes(timestamp),
+            difficulty_target: u64::from_le_bytes(difficulty_target),
+            cumulative_weight: u128::from_le_bytes(cumulative_weight),
+        };
+
+        // Read the header nonce.
+        let nonce = FromBytes::read_le(&mut reader)?;
+        // Read the header proof.
+        let proof = FromBytes::read_le(&mut reader)?;
+
+        // Construct the block header.
+        Ok(Self::from_unchecked(
+            previous_ledger_root,
+            transactions_root,
+            metadata,
+            nonce,
+            proof,
+        )?)
     }
 }
 
