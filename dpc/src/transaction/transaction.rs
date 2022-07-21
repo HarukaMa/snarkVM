@@ -109,18 +109,16 @@ impl<N: Network> Transaction<N> {
     /// Initializes an instance of `Transaction` from the given inputs.
     #[inline]
     pub fn from_unchecked(
-        inner_circuit_id: N::InnerCircuitID,
+        input_circuit_id: N::InputCircuitID,
+        output_circuit_id: N::OutputCircuitID,
         ledger_root: N::LedgerRoot,
         transitions: Vec<Transition<N>>,
+        kernel_proof: KernelProof<N>,
     ) -> Result<Self> {
         let transaction_id = Self::compute_transaction_id(&transitions)?;
 
-        let transaction = Self {
-            transaction_id,
-            inner_circuit_id,
-            ledger_root,
-            transitions,
-        };
+        let transaction =
+            Self { transaction_id, input_circuit_id, output_circuit_id, ledger_root, transitions, kernel_proof };
 
         match transaction.is_valid_fast() {
             true => Ok(transaction),
@@ -269,7 +267,7 @@ impl<N: Network> Transaction<N> {
         }
 
         // Returns `false` if the number of serial numbers in the transaction is incorrect.
-        if self.serial_numbers().count() != num_transitions * N::NUM_INPUT_RECORDS {
+        if self.serial_numbers().count() > num_transitions * N::NUM_INPUTS as usize {
             eprintln!("Transaction contains incorrect number of serial numbers");
             return false;
         }
@@ -281,7 +279,7 @@ impl<N: Network> Transaction<N> {
         }
 
         // Returns `false` if the number of commitments in the transaction is incorrect.
-        if self.commitments().count() != num_transitions * N::NUM_OUTPUT_RECORDS {
+        if self.commitments().count() > num_transitions * N::NUM_OUTPUTS as usize {
             eprintln!("Transaction contains incorrect number of commitments");
             return false;
         }
@@ -293,7 +291,7 @@ impl<N: Network> Transaction<N> {
         }
 
         // Returns `false` if the number of record ciphertexts in the transaction is incorrect.
-        if self.ciphertexts().count() != num_transitions * N::NUM_OUTPUT_RECORDS {
+        if self.ciphertexts().count() > num_transitions * N::NUM_OUTPUTS as usize {
             eprintln!("Transaction contains incorrect number of record ciphertexts");
             return false;
         }
@@ -306,10 +304,7 @@ impl<N: Network> Transaction<N> {
 
         // Returns `false` if the transaction is not a coinbase, and has a transition with a negative value balance.
         if self.transitions.len() > 1
-            && self
-            .transitions
-            .iter()
-            .any(|transition| transition.value_balance().is_negative())
+            && self.transitions.iter().any(|transition| transition.value_balance().is_negative())
         {
             eprintln!("Transaction contains a transition with a negative value balance");
             return false;
@@ -327,7 +322,7 @@ impl<N: Network> Transaction<N> {
         // Returns `false` if any transition is invalid.
         for transition in &self.transitions {
             // Returns `false` if the transition is invalid.
-            if !transition.verify_fast() {
+            if !transition.verify(self.input_circuit_id, self.output_circuit_id, self.ledger_root, transitions.root()) {
                 eprintln!("Transaction contains an invalid transition");
                 return false;
             }
@@ -474,7 +469,8 @@ impl<N: Network> Transaction<N> {
 
     #[inline]
     pub fn read_le_unchecked<R: Read>(mut reader: R) -> IoResult<Self> {
-        let inner_circuit_id = FromBytes::read_le(&mut reader)?;
+        let input_circuit_id = FromBytes::read_le(&mut reader)?;
+        let output_circuit_id = FromBytes::read_le(&mut reader)?;
         let ledger_root = FromBytes::read_le(&mut reader)?;
 
         let num_transitions: u16 = FromBytes::read_le(&mut reader)?;
@@ -482,8 +478,10 @@ impl<N: Network> Transaction<N> {
         for _ in 0..num_transitions {
             transitions.push(FromBytes::read_le(&mut reader)?);
         }
+        let kernel_proof = FromBytes::read_le(&mut reader)?;
 
-        Ok(Self::from_unchecked(inner_circuit_id, ledger_root, transitions).expect("Failed to deserialize a transaction"))
+        Self::from_unchecked(input_circuit_id, output_circuit_id, ledger_root, transitions, kernel_proof)
+            .map_err(|e| error(format!("Failed to deserialize a transaction: {e}")))
     }
 }
 
