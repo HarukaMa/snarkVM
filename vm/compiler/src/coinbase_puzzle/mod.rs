@@ -209,7 +209,7 @@ impl<N: Network> CoinbasePuzzle<N> {
 
 impl<N: Network> CoinbasePuzzle<N> {
     /// Returns the prover polynomial for the coinbase puzzle.
-    fn prover_polynomial(
+    pub fn prover_polynomial(
         epoch_challenge: &EpochChallenge<N>,
         address: &Address<N>,
         nonce: u64,
