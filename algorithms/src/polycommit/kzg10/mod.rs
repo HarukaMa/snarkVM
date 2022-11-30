@@ -167,7 +167,7 @@ impl<E: PairingEngine> KZG10<E> {
     }
 
     /// Outputs a commitment to `polynomial`.
-    pub fn commit_lagrange(
+    pub async fn commit_lagrange(
         lagrange_basis: &LagrangeBasis<E>,
         evaluations: &[E::Fr],
         hiding_bound: Option<usize>,
@@ -188,6 +188,11 @@ impl<E: PairingEngine> KZG10<E> {
 
         let evaluations = evaluations.iter().map(|e| e.to_bigint()).collect::<Vec<_>>();
         let msm_time = start_timer!(|| "MSM to compute commitment to plaintext poly");
+        #[cfg(all(feature = "cuda", target_arch = "x86_64"))]
+        let mut commitment = tokio_rayon::spawn(|| {
+            VariableBase::msm(&lagrange_basis.lagrange_basis_at_beta_g, &evaluations);
+        }).await?;
+        #[cfg(not(all(feature = "cuda", target_arch = "x86_64")))]
         let mut commitment = VariableBase::msm(&lagrange_basis.lagrange_basis_at_beta_g, &evaluations);
         end_timer!(msm_time);
 
