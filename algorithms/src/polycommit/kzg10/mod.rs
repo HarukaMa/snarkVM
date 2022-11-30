@@ -168,7 +168,7 @@ impl<E: PairingEngine> KZG10<E> {
 
     /// Outputs a commitment to `polynomial`.
     pub async fn commit_lagrange(
-        lagrange_basis: &LagrangeBasis<E>,
+        lagrange_basis: &LagrangeBasis<'_, E>,
         evaluations: &[E::Fr],
         hiding_bound: Option<usize>,
         terminator: &AtomicBool,
