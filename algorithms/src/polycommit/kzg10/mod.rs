@@ -188,12 +188,15 @@ impl<E: PairingEngine> KZG10<E> {
 
         let evaluations = evaluations.iter().map(|e| e.to_bigint()).collect::<Vec<_>>();
         let msm_time = start_timer!(|| "MSM to compute commitment to plaintext poly");
-        #[cfg(all(feature = "cuda", target_arch = "x86_64"))]
-        let mut commitment = tokio_rayon::spawn(|| {
+        let mut commitment = if cfg!(feature = "cuda") && cfg!(target_arch = "x86_64") {
+            let a = lagrange_basis.lagrange_basis_at_beta_g.clone().into_owned();
+            let b = evaluations.clone().to_owned();
+            tokio_rayon::spawn(move || {
+                VariableBase::msm(&a, &b)
+            }).await
+        } else {
             VariableBase::msm(&lagrange_basis.lagrange_basis_at_beta_g, &evaluations)
-        }).await;
-        #[cfg(not(all(feature = "cuda", target_arch = "x86_64")))]
-        let mut commitment = VariableBase::msm(&lagrange_basis.lagrange_basis_at_beta_g, &evaluations);
+        };
         end_timer!(msm_time);
 
         if terminator.load(Ordering::Relaxed) {
