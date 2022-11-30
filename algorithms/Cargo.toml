@@ -86,6 +86,10 @@ version = "1.0"
 version = "0.5"
 optional = true
 
+[dependencies.futures]
+version = "0.3.25"
+features = [ "executor" ]
+
 [dependencies.hashbrown]
 version = "0.13.1"
 

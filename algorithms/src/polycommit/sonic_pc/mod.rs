@@ -277,13 +277,13 @@ impl<E: PairingEngine, S: AlgebraicSponge<E::Fq, 2>> SonicKZG10<E, S> {
                                     .ok_or(PCError::UnsupportedLagrangeBasisSize(domain.size()))?;
                                 assert!(domain.size().is_power_of_two());
                                 assert!(lagrange_basis.size().is_power_of_two());
-                                kzg10::KZG10::commit_lagrange(
+                                futures::executor::block_on(kzg10::KZG10::commit_lagrange(
                                     &lagrange_basis,
                                     &evaluations.evaluations,
                                     hiding_bound,
                                     terminator,
                                     rng_ref,
-                                )
+                                ))
                             }
                             PolynomialWithBasis::Monomial { polynomial, degree_bound } => {
                                 let powers = if let Some(degree_bound) = degree_bound {

@@ -193,7 +193,7 @@ impl<E: PairingEngine> KZG10<E> {
             VariableBase::msm(&lagrange_basis.lagrange_basis_at_beta_g, &evaluations);
         }).await?;
         #[cfg(not(all(feature = "cuda", target_arch = "x86_64")))]
-        let mut commitment = VariableBase::msm(&lagrange_basis.lagrange_basis_at_beta_g, &evaluations);
+        let mut commitment = VariableBase::msm(&lagrange_basis.lagrange_basis_at_beta_g, &evaluations).await;
         end_timer!(msm_time);
 
         if terminator.load(Ordering::Relaxed) {
@@ -319,7 +319,7 @@ impl<E: PairingEngine> KZG10<E> {
             *divisor_eval *= eval - evaluation_at_point;
         });
         let (witness_comm, _) =
-            Self::commit_lagrange(lagrange_basis, &divisor_evals, None, &AtomicBool::new(false), None)?;
+            futures::executor::block_on(Self::commit_lagrange(lagrange_basis, &divisor_evals, None, &AtomicBool::new(false), None))?;
 
         Ok(KZGProof { w: witness_comm.0, random_v: None })
     }

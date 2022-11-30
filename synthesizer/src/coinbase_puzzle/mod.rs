@@ -104,7 +104,7 @@ impl<N: Network> CoinbasePuzzle<N> {
     }
 
     /// Returns a prover solution to the coinbase puzzle.
-    pub fn prove(
+    pub async fn prove(
         &self,
         epoch_challenge: &EpochChallenge<N>,
         address: Address<N>,
@@ -128,7 +128,7 @@ impl<N: Network> CoinbasePuzzle<N> {
             product_evaluations
         };
         let (commitment, _rand) =
-            KZG10::commit_lagrange(&pk.lagrange_basis(), &product_evaluations, None, &Default::default(), None)?;
+            KZG10::commit_lagrange(&pk.lagrange_basis(), &product_evaluations, None, &Default::default(), None).await?;
 
         let partial_solution = PartialSolution::new(address, nonce, commitment);
 
