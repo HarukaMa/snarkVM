@@ -145,7 +145,6 @@ version = "1.0"
 
 [dependencies.tokio-rayon]
 version = "2.1.0"
-optional = true
 
 [dependencies.wasm-bindgen-futures]
 version = "0.4"
@@ -186,7 +185,6 @@ wasm = [
 ]
 cuda = [
   "snarkvm-cuda",
-  "tokio-rayon"
 ]
 parallel = [
   "rayon",
