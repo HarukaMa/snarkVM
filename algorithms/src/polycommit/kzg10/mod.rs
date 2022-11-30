@@ -193,7 +193,7 @@ impl<E: PairingEngine> KZG10<E> {
             VariableBase::msm(&lagrange_basis.lagrange_basis_at_beta_g, &evaluations);
         }).await?;
         #[cfg(not(all(feature = "cuda", target_arch = "x86_64")))]
-        let mut commitment = VariableBase::msm(&lagrange_basis.lagrange_basis_at_beta_g, &evaluations).await;
+        let mut commitment = VariableBase::msm(&lagrange_basis.lagrange_basis_at_beta_g, &evaluations);
         end_timer!(msm_time);
 
         if terminator.load(Ordering::Relaxed) {
