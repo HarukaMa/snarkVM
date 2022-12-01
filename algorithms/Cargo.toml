@@ -143,8 +143,9 @@ features = [ "const_generics", "const_new" ]
 [dependencies.thiserror]
 version = "1.0"
 
-[dependencies.tokio-rayon]
-version = "2.1.0"
+[dependencies.tokio]
+version = "1.22.0"
+features = [ "rt-multi-thread" ]
 
 [dependencies.wasm-bindgen-futures]
 version = "0.4"

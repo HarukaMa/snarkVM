@@ -191,9 +191,9 @@ impl<E: PairingEngine> KZG10<E> {
         let mut commitment = if cfg!(feature = "cuda") && cfg!(target_arch = "x86_64") {
             let a = lagrange_basis.lagrange_basis_at_beta_g.clone().into_owned();
             let b = evaluations.clone().to_owned();
-            tokio_rayon::spawn(move || {
+            tokio::task::spawn_blocking(move || {
                 VariableBase::msm(&a, &b)
-            }).await
+            }).await.unwrap()
         } else {
             VariableBase::msm(&lagrange_basis.lagrange_basis_at_beta_g, &evaluations)
         };
